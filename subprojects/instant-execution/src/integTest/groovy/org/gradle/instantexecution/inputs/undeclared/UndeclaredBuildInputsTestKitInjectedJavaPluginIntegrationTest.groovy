@@ -16,6 +16,7 @@
 
 package org.gradle.instantexecution.inputs.undeclared
 
+import org.gradle.integtests.fixtures.daemon.DaemonLogsAnalyzer
 import org.gradle.integtests.fixtures.executer.AbstractGradleExecuter
 import org.gradle.integtests.fixtures.executer.ExecutionFailure
 import org.gradle.integtests.fixtures.executer.ExecutionResult
@@ -26,13 +27,16 @@ import org.gradle.integtests.fixtures.executer.OutputScrapingExecutionResult
 import org.gradle.test.fixtures.file.TestDirectoryProvider
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.testkit.runner.GradleRunner
+import org.gradle.testkit.runner.internal.ToolingApiGradleExecutor
 
 class UndeclaredBuildInputsTestKitInjectedJavaPluginIntegrationTest extends AbstractUndeclaredBuildInputsIntegrationTest implements JavaPluginImplementation {
     TestFile jar
+    TestFile testkitDir
 
     @Override
     GradleExecuter createExecuter() {
-        def executer = new TestKitBackedGradleExecuter(distribution, temporaryFolder, getBuildContext())
+        testkitDir = file("test-kit")
+        def executer = new TestKitBackedGradleExecuter(distribution, temporaryFolder, getBuildContext(), testkitDir)
         jar = file("plugins/sneaky.jar")
         executer.pluginClasspath.add(jar)
         return executer
@@ -53,10 +57,12 @@ implementation-class: SneakyPlugin
 
     static class TestKitBackedGradleExecuter extends AbstractGradleExecuter {
         List<File> pluginClasspath = []
-        final IntegrationTestBuildContext buildContext
+        private final IntegrationTestBuildContext buildContext
+        private final TestFile testKitDir
 
-        TestKitBackedGradleExecuter(GradleDistribution distribution, TestDirectoryProvider testDirectoryProvider, IntegrationTestBuildContext buildContext) {
+        TestKitBackedGradleExecuter(GradleDistribution distribution, TestDirectoryProvider testDirectoryProvider, IntegrationTestBuildContext buildContext, TestFile testKitDir) {
             super(distribution, testDirectoryProvider)
+            this.testKitDir = testKitDir
             this.buildContext = buildContext
         }
 
@@ -65,10 +71,17 @@ implementation-class: SneakyPlugin
         }
 
         @Override
+        void cleanup() {
+            super.cleanup()
+            def analyzer = new DaemonLogsAnalyzer(testKitDir.file(ToolingApiGradleExecutor.TEST_KIT_DAEMON_DIR_NAME), gradleVersion.getVersion())
+            analyzer.killAll()
+        }
+
+        @Override
         protected ExecutionResult doRun() {
             def runner = GradleRunner.create()
             runner.withGradleInstallation(buildContext.gradleHomeDir)
-            runner.withTestKitDir(buildContext.gradleUserHomeDir)
+            runner.withTestKitDir(testKitDir)
             runner.withProjectDir(workingDir)
             def args = allArgs
             args.remove("--no-daemon")
