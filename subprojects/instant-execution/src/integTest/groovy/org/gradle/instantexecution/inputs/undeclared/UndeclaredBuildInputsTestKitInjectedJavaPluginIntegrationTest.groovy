@@ -31,15 +31,19 @@ import org.gradle.testkit.runner.internal.ToolingApiGradleExecutor
 
 class UndeclaredBuildInputsTestKitInjectedJavaPluginIntegrationTest extends AbstractUndeclaredBuildInputsIntegrationTest implements JavaPluginImplementation {
     TestFile jar
-    TestFile testkitDir
+    TestFile testKitDir
 
     @Override
     GradleExecuter createExecuter() {
-        testkitDir = file("test-kit")
-        def executer = new TestKitBackedGradleExecuter(distribution, temporaryFolder, getBuildContext(), testkitDir)
+        testKitDir = file("test-kit")
+        def executer = new TestKitBackedGradleExecuter(distribution, temporaryFolder, getBuildContext(), testKitDir)
         jar = file("plugins/sneaky.jar")
         executer.pluginClasspath.add(jar)
         return executer
+    }
+
+    def cleanup() {
+        DaemonLogsAnalyzer.newAnalyzer(testKitDir.file(ToolingApiGradleExecutor.TEST_KIT_DAEMON_DIR_NAME)).killAll()
     }
 
     @Override
@@ -68,13 +72,6 @@ implementation-class: SneakyPlugin
 
         @Override
         void assertCanExecute() throws AssertionError {
-        }
-
-        @Override
-        void cleanup() {
-            super.cleanup()
-            def analyzer = new DaemonLogsAnalyzer(testKitDir.file(ToolingApiGradleExecutor.TEST_KIT_DAEMON_DIR_NAME), gradleVersion.getVersion())
-            analyzer.killAll()
         }
 
         @Override
